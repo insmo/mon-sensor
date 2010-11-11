@@ -1,3 +1,9 @@
 [submodule "arduino"]
 	path = arduino
 	url = git@github.com:simonz05/arduino-headers.git
+[submodule "tests/attiny/arduino"]
+	path = tests/attiny/arduino
+	url = git@github.com:simonz05/arduino-headers.git
+[submodule "tests/serial/arduino"]
+	path = tests/serial/arduino
+	url = git@github.com:simonz05/arduino-headers.git
