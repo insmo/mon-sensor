@@ -42,19 +42,6 @@ standby                 1.21
 extended standby        1.97
 
 
-## 2010.10.16
-
-### todo
-
-#. find bug in circuit. x
-#. test transistor in simulator. omitted
-#. test transistor in isolated circuit. done. x
-    Transistors should be able to control the power for the xbee.
-#. define protocol for sending data to host. x
-#. test protocol. x
-#. write a protocol parser in python for monitor. x
-#. think about how the remote should operate/design.
-
 ## 20.10.17
 
 Battery duration calculations based on _test/sleep/sleep_test.c_. In this test
