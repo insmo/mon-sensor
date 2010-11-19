@@ -116,7 +116,6 @@ static void read_data(char *s, uint8_t data) {
 }
 
 uint16_t ms;
-
 timer2_interrupt_a() {
     ms++;
 }
@@ -125,58 +124,47 @@ __attribute__((noreturn)) int main () {
     uint8_t data;
     char buf[10];
 
-    /* configure and set watchdog interrupt mode */
+    /* watchdog init */
     cli();
     wdt_reset();
     wdt_enable(WDTO_8S);
     wdt_interrupt_enable();
     sei();
 
-    /* Setup serial mode and transmission speed. 
-     * Serial transmitter should be disabled
-     * when not used to save power. */
+    /* serial init */
     serial_baud_4800();
 	serial_mode_8n1();
     serial_transmitter_enable();
 
-    /* Set LED_1 to output, use it as an indicator of sleeping. */
+    /* status led init */
     pin_mode_output(LED_1);
     pin_high(LED_1);
     _delay_ms(500);
 
-    /* Set XBee control pin and put XBee to sleep. */
-    xbee_hibernate_disable();
-
-    prints("A;\0");
-    prints("B;\0");
-    prints("A;\0");
-
-    xbee_hibernate_enable();
-
-     /* Setup interrupt based timer to tick each 0.001 s (1 ms). The internal
-     * timers clock frequency is based on the system F_CPU.
-     *
-     * 1. Clear on Timer Compare.
-     * 2. Prescaler to 64(devide internal timer for lower precision).
-     * 3. When timer hits 125, 1 ms has passed. 
-     * 4. Enable compare match interrupt to wake the uC each 1 ms. */ 
-
+    /* timer2 init to 1ms */ 
     timer2_mode_ctc();
     timer2_clock_d64(); 
     timer2_compare_a_set(125); 
     timer2_interrupt_a_enable();
     //timer2_interrupt_ovf_enable();
     
+
+    /* ADC init */
     adc_reference_internal_1v1();
 	adc_clock_d128();
     adc_interrupt_enable();
     
-    /* Enable global interrupts. */
-
+    /* set global interrrupts */
     sei(); 
 
+    /* send welcome message */
+    xbee_hibernate_disable();
+    prints("initializing \0");
+    xbee_hibernate_enable();
+
+    wdt_reset();
+
     while(1) {
-        wdt_interrupt_enable();
         pin_low(LED_1);
 
         if (events == EV_NONE){
