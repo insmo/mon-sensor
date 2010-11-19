@@ -9,15 +9,30 @@
 #include "arduino/serial.h"
 #include "arduino/pins.h"
 #include "arduino/sleep.h"
+#include "arduino/timer2.h"
 #include "arduino/wdt.h"
 #include "arduino/adc.h"
 
 #define FOSC  800000
 
 #define LED_1 2
-#define LED_2 3
-#define XBEE 4
+#define XBEE 3
 #define PHOTO 5
+
+#define V_BIT 0.00322265625 // 3.3V/1024
+#define V_REF 3.3
+
+#define LUX_REL 500         // RL = 500 / lux Kohm
+#define LUX_RF 1000         // lux V div res
+
+#define sleep(mode)\
+    cli();\
+    sleep_mode_##mode();\
+    sleep_enable();\
+    sleep_bod_disable();\
+    sei();\
+    sleep_cpu();\
+    sleep_disable();
 
 enum events {
     EV_NONE = 0,
@@ -32,33 +47,33 @@ static volatile struct {
 
 volatile uint8_t events = EV_NONE;
 
-static inline void sleep_uc() {
-    sleep_enable();
-    sleep_bod_disable();
-    sei();
-    sleep_cpu();  
-    sleep_disable();
+static inline uint8_t vtolux(uint8_t vout) {
+    return LUX_REL / (LUX_RF * (V_REF - vout) / vout);
+}
+
+static inline uint8_t btov(uint8_t bit) {
+    return V_BIT * bit;
 }
 
 static inline void wait_on_print() {
 again:
-    cli();
-    sleep_mode_idle();
     if (output.printing) {
-        sleep_uc();
+        sleep(idle);
         goto again;
 	}
-    sleep_mode_power_down();
-	sei();
 }
 
 static inline void xbee_hibernate_enable() { 
+    pin_mode_output(XBEE);
+    pin_high(XBEE);
+    pin_low(LED_1);
     _delay_ms(100);
-    pin_high(XBEE); 
 }
 
 static inline void xbee_hibernate_disable() { 
-    pin_low(XBEE); 
+    pin_mode_input(XBEE);
+    pin_high(XBEE);
+    pin_high(LED_1);
     _delay_ms(100);
 }
 
@@ -88,7 +103,7 @@ uint8_t wdt_ctr;
 
 wdt_interrupt() {
     wdt_reset();
-    if (++wdt_ctr == 210) { 
+    if (++wdt_ctr == 210) { // 210 is ~30m
         wdt_ctr = 0;
         events |= EV_ADC;
     }
@@ -98,6 +113,12 @@ adc_interrupt() {
 }
 
 static void read_data(char *s, uint8_t data) {
+}
+
+uint16_t ms;
+
+timer2_interrupt_a() {
+    ms++;
 }
 
 __attribute__((noreturn)) int main () {
@@ -118,8 +139,12 @@ __attribute__((noreturn)) int main () {
 	serial_mode_8n1();
     serial_transmitter_enable();
 
+    /* Set LED_1 to output, use it as an indicator of sleeping. */
+    pin_mode_output(LED_1);
+    pin_high(LED_1);
+    _delay_ms(500);
+
     /* Set XBee control pin and put XBee to sleep. */
-    pin_mode_output(XBEE);
     xbee_hibernate_disable();
 
     prints("A;\0");
@@ -128,34 +153,24 @@ __attribute__((noreturn)) int main () {
 
     xbee_hibernate_enable();
 
-    /* Set LED_1 to output, use it as an indicator of sleeping. */
-
-    pin_mode_output(LED_1);
-    pin_high(LED_1);
-
      /* Setup interrupt based timer to tick each 0.001 s (1 ms). The internal
      * timers clock frequency is based on the system F_CPU.
      *
      * 1. Clear on Timer Compare.
-     * 2. Prescaler to 128(devide internal timer for lower precision).
-     * 3. When timer hits 144, 1 ms has passed. 
+     * 2. Prescaler to 64(devide internal timer for lower precision).
+     * 3. When timer hits 125, 1 ms has passed. 
      * 4. Enable compare match interrupt to wake the uC each 1 ms. */ 
 
-    // timer2_mode_normal();
-    // timer2_clock_d1024(); 
-    // //timer2_compare_a_set(255); 
-    // //timer2_interrupt_a_enable();
-    // timer2_interrupt_ovf_enable();
+    timer2_mode_ctc();
+    timer2_clock_d64(); 
+    timer2_compare_a_set(125); 
+    timer2_interrupt_a_enable();
+    //timer2_interrupt_ovf_enable();
     
     adc_reference_internal_1v1();
 	adc_clock_d128();
     adc_interrupt_enable();
     
-    /* Setup the global sleep mode to power-down which draws about 1u.
-     * The watchdog interrupt is able to wake up the uC from the power-down. */
-
-    sleep_mode_power_down();
-
     /* Enable global interrupts. */
 
     sei(); 
@@ -164,12 +179,10 @@ __attribute__((noreturn)) int main () {
         wdt_interrupt_enable();
         pin_low(LED_1);
 
-        cli();
         if (events == EV_NONE){
-            sleep_uc();
+            sleep(power_down);
             continue;
         }
-        sei();
         
         if (events & EV_ADC) {
             events &= ~EV_ADC;
@@ -177,10 +190,7 @@ __attribute__((noreturn)) int main () {
 	        adc_pin_select(PHOTO);
 	        adc_enable();
 
-            sleep_mode_noise_reduction();
-            cli();
-            sleep_uc();            
-            sleep_mode_power_down();
+            sleep(noise_reduction);            
 
             itoa(adc_data(), buf, 10);
             events |= EV_UPDATE;
