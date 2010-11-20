@@ -109,6 +109,6 @@ void main() {
     if (fails == 0)
         printf("\n%d PASSED\n", tests);
     else 
-        printf("\n%d PASSED, %d FAILED\n", tests, fails);
+        printf("\n%d PASSED, %d FAILED\n", tests - fails, fails);
 }
 
