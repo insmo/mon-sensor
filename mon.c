@@ -15,15 +15,21 @@
 
 #define FOSC  800000
 
+/* digital */
 #define LED_1 2
 #define XBEE 3
+#define SENSORS 4
+
+/* analog */
 #define PHOTO 5
 
-#define V_BIT 0.00322265625 // 3.3V/1024
+/* voltage */
+#define V_BIT 0.00322265625 /* 3.3V / 1024-bit */
 #define V_REF 3.3
 
-#define LUX_REL 500         // RL = 500 / lux Kohm
-#define LUX_RF 1000         // lux V div res
+/* lux */
+#define LUX_REL 500         /* RL = 500 / lux Kohm */
+#define LUX_RF 1000         /* lux V R2 resistor */
 
 #define sleep(mode)\
     cli();\
