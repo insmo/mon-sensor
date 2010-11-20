@@ -10,7 +10,7 @@ static int tests = 0, fails = 0;
 #define test_cond(_c) if(_c) printf("PASSED\n"); else {printf("FAILED\n"); fails++;}
 
 void bin(short d) {
-#if VERBOSE == 1
+#if VERBOSE 
     int i;
     for(i = 7; i >= 0; i--) {
         if((1 << i) & d)
@@ -21,21 +21,21 @@ void bin(short d) {
 #endif
 }
 
-static volatile struct {
+static struct {
 	uint8_t head;
 	uint8_t tail;
 	uint8_t buf[BUF];
 } output;
 
-static volatile uint8_t readable() {
+static uint8_t readable() {
     return (output.head - output.tail) & (BUF - 1);
 }
 
-static volatile uint8_t writeable() {
+static uint8_t writeable() {
     return ((output.tail - output.head - 1) & (BUF - 1));
 }
 
-static volatile uint8_t read(uint8_t *d) {
+static uint8_t read(uint8_t *d) {
     if (readable()) {
         *d = output.buf[output.tail++];
         output.tail &= (BUF - 1);
@@ -44,7 +44,7 @@ static volatile uint8_t read(uint8_t *d) {
     return 0;
 }
 
-static volatile uint8_t write(uint8_t d) {
+static uint8_t write(uint8_t d) {
     if (writeable()) {
         output.buf[output.head++] = d;
         output.head &= (BUF - 1);

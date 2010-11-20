@@ -30,11 +30,11 @@ all: $(NAME).hex
 	@echo '  CC $@'
 	@$(CC) $(CFLAGS) -c $< -o $@
 
-main.o: mon.c
+main.o: %.c
 	@echo '  CC $@'
 	@$(CC) $(CFLAGS) -c $< -o $@
 
-%.elf: %.o
+%.elf: mon.o serial.o
 	@echo '  LD $@'
 	@$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
