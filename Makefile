@@ -52,14 +52,11 @@ main.o: mon.c
 upload: $(NAME).hex
 	@$(AVRDUDE) -vD -c$(PROGRAMMER) -b$(BAUD_RATE) -p$(MCU) -P$(PORT) -e -Uflash:w:$<:i -v
 
-u: $(NAME).hex
-	@$(AVRDUDE) -c$(PROGRAMMER) -B$(BIT_CLOCK) -p$(MCU) -P$(PORT) -e -Uflash:w:$<:i 
-
 list: $(NAME).lss
 
 tty:
-	@echo '  STTY -F$(PORT) cs8 parenb -parodd cstopb raw -echo 9600'
-	@$(STTY) -F$(PORT) cs8 parenb -parodd cstopb raw -echo 9600
+	@echo '  STTY -F$(PORT) cs8 parenb -parodd cstopb raw -echo 4800'
+	@$(STTY) -F$(PORT) cs8 parenb -parodd cstopb raw -echo 4800
 
 clean:
 	rm -f *.o *.elf *.hex *.lss
