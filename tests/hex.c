@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#define _BV(bit) (1 << (bit))
 #define VERBOSE 0
 
 static int tests = 0, fails = 0;

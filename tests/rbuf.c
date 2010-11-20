@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#define _BV(bit) (1 << (bit))
 #define BUF 64
 #define VERBOSE 0
 
@@ -111,4 +110,3 @@ void main() {
     else 
         printf("\n%d PASSED, %d FAILED\n", tests - fails, fails);
 }
-
