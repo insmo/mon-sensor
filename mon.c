@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <avr/interrupt.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -31,6 +30,9 @@
 #define LUX_REL 500         /* RL = 500 / lux Kohm */
 #define LUX_RF 1000         /* lux V R2 resistor */
 
+/* ringbuffer */
+#define RBUF 64
+
 #define sleep(mode)\
     cli();\
     sleep_mode_##mode();\
@@ -46,12 +48,13 @@ enum events {
     EV_ADC = 1 << 1
 };
 
-static volatile struct {
-	char *str;
-	uint8_t printing;
-} output;
-
 volatile uint8_t events = EV_NONE;
+
+static volatile struct {
+	uint8_t head;
+	uint8_t tail;
+	char buf[RBUF];
+} output;
 
 static inline uint8_t vtolux(uint8_t vout) {
     return LUX_REL / (LUX_RF * (V_REF - vout) / vout);
@@ -61,55 +64,95 @@ static inline uint8_t btov(uint8_t bit) {
     return V_BIT * bit;
 }
 
-static inline void wait_on_print() {
-again:
-    if (output.printing) {
-        sleep(idle);
-        goto again;
-	}
-}
-
 static inline void xbee_hibernate_enable() { 
     pin_mode_output(XBEE);
     pin_high(XBEE);
     pin_low(LED_1);
-    _delay_ms(100);
 }
 
 static inline void xbee_hibernate_disable() { 
     pin_mode_input(XBEE);
     pin_high(XBEE);
     pin_high(LED_1);
-    _delay_ms(100);
+    _delay_ms(32);
+}
+
+static inline uint8_t out_readable() {
+    return (output.head - output.tail) & (RBUF - 1);
+}
+
+static inline uint8_t out_writeable() {
+    return ((output.tail - output.head - 1) & (RBUF - 1));
+}
+
+static inline uint8_t out_read(char *d) {
+    if (out_readable()) {
+        *d = output.buf[output.tail++];
+        output.tail &= (RBUF - 1);
+        return 1;
+    }
+    return 0;
+}
+
+static inline uint8_t out_write(char d) {
+    if (out_writeable()) {
+        output.buf[output.head++] = d;
+        output.head &= (RBUF - 1);
+        return 1;
+    }
+    return 0;
+}
+
+static inline void wait_on_buf() {
+    while (out_writeable() == 0) {
+        sleep(idle);
+    }
+}
+
+static inline void print(char d) {
+    wait_on_buf();
+
+    out_write(d);
+	serial_interrupt_dre_enable();
+}
+
+static inline void printstr(char *d) {
+    char c;
+    while ((c = *d++))
+        print(c);
+}
+
+void print_hex4(uint8_t v) {
+	v &= 0xF;
+	if (v < 10)
+		print('0' + v);
+	else
+		print('A' - 10 + v);
+}
+
+void print_hex8(uint8_t v) {
+	print_hex4(v >> 4);
+	print_hex4(v & 0x0F);
+}
+
+void print_hex16(uint16_t v) {
+	print_hex8(v >> 8);
+	print_hex8(v & 0xFF);
 }
 
 serial_interrupt_dre() {
-	char *str = output.str;
-	uint8_t c = *str;
-
-	if (c == '\0') {
-		serial_interrupt_dre_disable();
-		output.printing = 0;
-	} else {
+	char c;
+    if (out_read(&c))
 		serial_write(c);
-		output.str = str + 1;
-	}
-}
-
-static inline void prints(char *s) {
-    wait_on_print();
-
-	output.str = s;
-	output.printing = 1;
-
-	serial_interrupt_dre_enable();
+    else 
+	    serial_interrupt_dre_disable();
 }
 
 uint8_t wdt_ctr;
 
 wdt_interrupt() {
     wdt_reset();
-    if (++wdt_ctr == 210) { // 210 is ~30m
+    if (++wdt_ctr == 1) { // 210 is ~30m
         wdt_ctr = 0;
         events |= EV_ADC;
     }
@@ -118,8 +161,8 @@ wdt_interrupt() {
 adc_interrupt() {
 }
 
-static void read_data(char *s, uint8_t data) {
-}
+// static void read_data(char *s, uint8_t data) {
+// }
 
 uint16_t ms;
 timer2_interrupt_a() {
@@ -127,8 +170,10 @@ timer2_interrupt_a() {
 }
 
 __attribute__((noreturn)) int main () {
-    uint8_t data;
-    char buf[10];
+    uint16_t data = 0;
+
+    output.head = 0;
+    output.tail = 0;
 
     /* watchdog init */
     cli();
@@ -153,7 +198,6 @@ __attribute__((noreturn)) int main () {
     timer2_compare_a_set(125); 
     timer2_interrupt_a_enable();
     //timer2_interrupt_ovf_enable();
-    
 
     /* ADC init */
     adc_reference_internal_1v1();
@@ -164,8 +208,6 @@ __attribute__((noreturn)) int main () {
     sei(); 
 
     /* send welcome message */
-    xbee_hibernate_disable();
-    prints("initializing \0");
     xbee_hibernate_enable();
 
     wdt_reset();
@@ -174,6 +216,7 @@ __attribute__((noreturn)) int main () {
         pin_low(LED_1);
 
         if (events == EV_NONE){
+            wdt_interrupt_enable();
             sleep(power_down);
             continue;
         }
@@ -181,17 +224,19 @@ __attribute__((noreturn)) int main () {
         if (events & EV_ADC) {
             events &= ~EV_ADC;
 
+            pin_high(SENSORS);
 	        adc_pin_select(PHOTO);
 	        adc_enable();
 
             sleep(noise_reduction);            
 
-            itoa(adc_data(), buf, 10);
-            events |= EV_UPDATE;
+            data = adc_data();
+            //read_data(buf, data);
 
-            read_data(buf, data);
             adc_disable();
+            pin_low(SENSORS);
 
+            events |= EV_UPDATE;
             continue;
         }
 
@@ -202,107 +247,14 @@ __attribute__((noreturn)) int main () {
             serial_transmitter_enable();
             xbee_hibernate_disable();
 
-            prints("lux");
-            prints(buf);
-            prints(";\0");
+            printstr("lux");
+            print_hex16(data);
+            printstr(";\0");
 
+            _delay_ms(1000);
             serial_transmitter_disable();
             xbee_hibernate_enable();
             continue;
         }
     }
 }
-
-// typedef struct rbuf_t {
-//     char buf[RBUF];
-//     char *in;
-//     char *out;
-//     uint8_t count;
-//     uint8_t printing;
-// } rbuf_t;
-// 
-// rbuf_t out;
-// 
-// static inline void buf_init(rbuf_t *buf) {
-//     buf->in = buf->buf;
-//     buf->out = buf->buf;
-// }
-// 
-// static inline void rbuf_insert(rbuf_t *buf, uint8_t data) {
-//     *buf->in = data;
-// 
-//     if (++buf->in == &buf->buf[RBUF])
-//         buf->in = buf->buf;
-// 
-//     // todo: make atomic
-//     buf->count++;
-// }
-// 
-// static inline char rbuf_remove(rbuf_t *buf) {
-//     char data = *buf->out;
-// 
-//     if (++buf->out == &buf->buf[RBUF])
-//         buf->out = buf->buf;
-// 
-//     // todo: make atomic
-//     buf->count--;
-// 
-//     return data;
-// }
-
-
-// serial_interrupt_dre() {
-//     if (out.count == 0) {
-//         out.printing = 0;
-//         serial_interrupt_dre_disable();
-//     } else {
-//         serial_write(rbuf_remove(&out));
-//     }
-// }
-// 
-// static inline void prints(char *s) {
-//     uint8_t i = 0;
-// 
-//     while (s[i] != '\0') {
-//         rbuf_insert(&out, s[i]);    
-//         i++;
-//     }
-// 
-//     if (out.printing == 0) {
-//         out.printing = 1;
-//         serial_interrupt_dre_enable();
-//     }
-// }
-
-// uint16_t ms;
-// 
-// /* Timer2 compare on match interrupt */
-// timer2_interrupt_a() {
-//     ms++;
-// }
-// 
-// static volatile struct Time {
-//     uint8_t m;
-//     uint8_t s;
-//     uint8_t h;
-// } timer2;
-// 
-// uint8_t ctr;
-// timer2_interrupt_ovf() {
-//     ctr++;
-//     if (ctr >= 244) {
-//         ctr = 0;
-//         timer2.s += 8;
-//         if (timer2.s >= 60) {
-//             timer2.m++;
-//             timer2.s -= 60;
-//         }
-//         if (timer2.m >= 60) {
-//             timer2.h++;
-//             timer2.m -= 60;
-//         }
-//         if (timer2.h == 24) {
-//             timer2.h = 0;
-//         }
-//     }
-// }
