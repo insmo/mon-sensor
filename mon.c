@@ -51,9 +51,9 @@ enum events {
 volatile uint8_t events = EV_NONE;
 
 static volatile struct {
-	uint8_t head;
-	uint8_t tail;
-	char buf[RBUF];
+    uint8_t head;
+    uint8_t tail;
+    char buf[RBUF];
 } output;
 
 static inline uint8_t vtolux(uint8_t vout) {
@@ -113,7 +113,7 @@ static inline void print(char d) {
     wait_on_buf();
 
     out_write(d);
-	serial_interrupt_dre_enable();
+    serial_interrupt_dre_enable();
 }
 
 static inline void printstr(char *d) {
@@ -123,29 +123,29 @@ static inline void printstr(char *d) {
 }
 
 void print_hex4(uint8_t v) {
-	v &= 0xF;
-	if (v < 10)
-		print('0' + v);
-	else
-		print('A' - 10 + v);
+    v &= 0xF;
+    if (v < 10)
+        print('0' + v);
+    else
+        print('A' - 10 + v);
 }
 
 void print_hex8(uint8_t v) {
-	print_hex4(v >> 4);
-	print_hex4(v & 0x0F);
+    print_hex4(v >> 4);
+    print_hex4(v & 0x0F);
 }
 
 void print_hex16(uint16_t v) {
-	print_hex8(v >> 8);
-	print_hex8(v & 0xFF);
+    print_hex8(v >> 8);
+    print_hex8(v & 0xFF);
 }
 
 serial_interrupt_dre() {
-	char c;
+    char c;
     if (out_read(&c))
-		serial_write(c);
+        serial_write(c);
     else 
-	    serial_interrupt_dre_disable();
+        serial_interrupt_dre_disable();
 }
 
 uint8_t wdt_ctr;
@@ -184,7 +184,7 @@ __attribute__((noreturn)) int main () {
 
     /* serial init */
     serial_baud_4800();
-	serial_mode_8n1();
+    serial_mode_8n1();
     serial_transmitter_enable();
 
     /* status led init */
@@ -201,7 +201,7 @@ __attribute__((noreturn)) int main () {
 
     /* ADC init */
     adc_reference_internal_1v1();
-	adc_clock_d128();
+    adc_clock_d128();
     adc_interrupt_enable();
     
     /* set global interrrupts */
@@ -225,8 +225,8 @@ __attribute__((noreturn)) int main () {
             events &= ~EV_ADC;
 
             pin_high(SENSORS);
-	        adc_pin_select(PHOTO);
-	        adc_enable();
+            adc_pin_select(PHOTO);
+            adc_enable();
 
             sleep(noise_reduction);            
 
