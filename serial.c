@@ -2,6 +2,13 @@
 #include "serial.h"
 #include "sleep.h"
 
+static void reverse(char *s, uint8_t n);
+static uint8_t out_readable();
+static uint8_t out_writeable();
+static uint8_t out_read(char *d);
+static uint8_t out_write(char d);
+static void wait_on_buf();
+
 static struct {
     uint8_t head;
     uint8_t tail;
@@ -34,9 +41,44 @@ static uint8_t out_write(char d) {
     return 0;
 }
 
-void wait_on_buf() {
+static void reverse(char *s, uint8_t n) {
+    uint8_t c, i;
+    for (i = 0; i < n; i++, n--) {
+        c = s[i];
+        s[i] = s[n];
+        s[n] = c;
+    }
+}
+
+char *itoa(char *s, uint16_t n) {
+    uint8_t i;
+    i = 0;
+
+    do {
+        s[i++] = n % 10 + '0';
+    } while ((n /= 10) > 0); 
+    
+    reverse(s, i-1);
+    return s+i;
+}
+
+char *buf_append(char *p, char *s) {
+    while ((*p++ = *s++))
+        ;
+    return p;
+}
+
+static void wait_on_buf() {
     while (out_writeable() == 0) {
         sleep(idle);
+    }
+}
+
+void wait_on_serial() {
+again:
+    if (!out_readable()) {
+        sleep(idle);
+        goto again;
     }
 }
 
@@ -47,28 +89,11 @@ void print(char d) {
     serial_interrupt_dre_enable();
 }
 
-void printstr(char *d) {
+void print_str(char *d) {
     char c;
     while ((c = *d++))
         print(c);
-}
-
-void print_hex4(uint8_t v) {
-    v &= 0xF;
-    if (v < 10)
-        print('0' + v);
-    else
-        print('A' - 10 + v);
-}
-
-void print_hex8(uint8_t v) {
-    print_hex4(v >> 4);
-    print_hex4(v & 0x0F);
-}
-
-void print_hex16(uint16_t v) {
-    print_hex8(v >> 8);
-    print_hex8(v & 0xFF);
+    print('\0');
 }
 
 inline void serial_buffer_reset() {

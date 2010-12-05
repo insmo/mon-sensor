@@ -4,11 +4,11 @@
 /* ringbuffer */
 #define RBUF 64
 
+char *itoa(char *s, uint16_t n);
+char *buf_append(char *p, char *s);
 void print(char d);
-void printstr(char *d);
-void print_hex4(uint8_t v);
-void print_hex8(uint8_t v);
-void print_hex16(uint16_t v);
+void print_str(char *d);
 inline void serial_buffer_reset();
+void wait_on_serial();
 
 #endif

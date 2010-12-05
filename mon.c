@@ -21,15 +21,34 @@
 #define SENSORS 4
 
 /* analog */
-#define PHOTO 5
+#define PHOTO 0
 
 /* voltage */
-#define V_BIT 0.00322265625 /* 3.3V / 1024-bit */
-#define V_REF 3.3
+#define V_BIT 32 /*0.00322265625 3.3V / 1024-bit */
+#define V_REF 3300 /* 256x3.3 = 844, 16*3.3 = 52 */
+ 
+/* 16*3.3 = 52
+ * 1023x16 = 16368
+ * 0.00322mVx10000 = 32
+ *
+ * 16368x52 = 851,136 (3.3*1023 = 3375.9)
+ *
+ * to_volt
+ * 1023x32  = 32,736
+ * 32,736 / 10,000 = 3.27
+ *
+ * 3.22x16 = 52
+ * 1023x16 = 16368
+*/
 
 /* lux */
 #define LUX_REL 500         /* RL = 500 / lux Kohm */
 #define LUX_RF 1000         /* lux V R2 resistor */
+
+static uint16_t vtolux(uint16_t vout);
+static inline uint16_t btov(uint16_t bit);
+static inline void xbee_hibernate_enable();
+static inline void xbee_hibernate_disable();
 
 enum events {
     EV_NONE = 0,
@@ -39,15 +58,35 @@ enum events {
 
 volatile uint8_t events = EV_NONE;
 
-static inline uint8_t vtolux(uint8_t vout) {
-    return LUX_REL / (LUX_RF * (V_REF - vout) / vout);
-}
 
-static inline uint8_t btov(uint8_t bit) {
+static inline uint16_t btov(uint16_t bit) {
     return V_BIT * bit;
 }
 
+static uint16_t vtolux(uint16_t vout) {
+    uint16_t v, lux_rf;
+    float lux_rel;
+
+    return 5 / (10 * ((3300.0 - vout) / vout));
+    // return 5.0 / (10.0 * ((3300 - 3290) / 3290 ));
+    // /* volt x 1000 %1.3f */
+    // v = 3300 - vout;
+    // printf("v: %d\n", v);
+    // 
+    // /* lux_rf r2 resistor / 100 */
+    // lux_rf = 10 * v;
+    // printf("rf: %d\n", lux_rf);
+
+    // lux_rel = 5 / lux_rf;
+    // printf("rel: %d\n", lux_rel);
+
+    // /* ex 500/(1000 * ((3.3-3.299)/3.299)) == 1649 lux*/
+    // //return LUX_REL / (LUX_RF * (V_REF - vout) / vout);
+    // return lux_rel;
+}
+
 static inline void xbee_hibernate_enable() { 
+    _delay_ms(150);
     pin_mode_output(XBEE);
     pin_high(XBEE);
     pin_low(LED_1);
@@ -58,6 +97,14 @@ static inline void xbee_hibernate_disable() {
     pin_low(XBEE);
     pin_high(LED_1);
     _delay_ms(32);
+}
+
+static void col_data(uint8_t pin, uint16_t *data) {
+    adc_pin_select(pin);
+    adc_enable();
+    sleep(noise_reduction);            
+    *data = adc_data();
+    adc_disable();
 }
 
 uint8_t wdt_ctr;
@@ -73,9 +120,6 @@ wdt_interrupt() {
 adc_interrupt() {
 }
 
-// static void read_data(char *s, uint8_t data) {
-// }
-
 uint16_t ms;
 timer2_interrupt_a() {
     ms++;
@@ -83,6 +127,8 @@ timer2_interrupt_a() {
 
 __attribute__((noreturn)) int main () {
     uint16_t data = 0;
+    char *p;
+    char out[32];
 
     /* watchdog init */
     cli();
@@ -97,8 +143,10 @@ __attribute__((noreturn)) int main () {
     serial_transmitter_enable();
     serial_buffer_reset();
 
-    /* status led init */
+    /* pin init */
     pin_mode_output(LED_1);
+    pin_mode_output(SENSORS);
+    pin_high(SENSORS);
     pin_high(LED_1);
     _delay_ms(500);
 
@@ -110,14 +158,13 @@ __attribute__((noreturn)) int main () {
     //timer2_interrupt_ovf_enable();
 
     /* ADC init */
-    adc_reference_internal_1v1();
+    adc_reference_internal_vcc();
     adc_clock_d128();
     adc_interrupt_enable();
     
     /* set global interrrupts */
     sei(); 
 
-    /* send welcome message */
     xbee_hibernate_enable();
 
     wdt_reset();
@@ -134,20 +181,15 @@ __attribute__((noreturn)) int main () {
         if (events & EV_ADC) {
             events &= ~EV_ADC;
 
+            /* photo cell */
             pin_high(SENSORS);
-            adc_pin_select(PHOTO);
-            adc_enable();
-
-            sleep(noise_reduction);            
-
-            data = adc_data();
-            //read_data(buf, data);
-
-            adc_disable();
+            col_data(PHOTO, &data);
             pin_low(SENSORS);
+            p = itoa(out, vtolux(data * V_BIT));
+            p = buf_append(p, "lux");
+            *p = '\0';
 
             events |= EV_UPDATE;
-            continue;
         }
 
         if (events & EV_UPDATE) {
@@ -157,14 +199,11 @@ __attribute__((noreturn)) int main () {
             serial_transmitter_enable();
             xbee_hibernate_disable();
 
-            printstr("lux");
-            print_hex16(data);
-            printstr(";\0");
+            print_str(out);
+            wait_on_serial();
 
-            _delay_ms(1000);
-            serial_transmitter_disable();
             xbee_hibernate_enable();
-            continue;
+            serial_transmitter_disable();
         }
     }
 }
