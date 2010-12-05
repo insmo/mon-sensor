@@ -18,10 +18,12 @@
 /* digital */
 #define LED_1 2
 #define XBEE 3
-#define SENSORS 4
+#define PHOTO_SWITCH 4
 
 /* analog */
 #define PHOTO 0
+#define CURRENT 1
+#define VOLT 2
 
 /* voltage */
 #define V_BIT 32 /*0.00322265625 3.3V / 1024-bit */
@@ -49,15 +51,19 @@ static uint16_t vtolux(uint16_t vout);
 static inline uint16_t btov(uint16_t bit);
 static inline void xbee_hibernate_enable();
 static inline void xbee_hibernate_disable();
+static inline void run_adc(uint8_t pin, uint16_t *data);
+static inline void reverse(char *s, uint8_t n);
+static inline char *itoa(char *s, uint16_t n);
 
 enum events {
     EV_NONE = 0,
     EV_UPDATE = 1 << 0,
-    EV_ADC = 1 << 1
+    EV_PHOTO = 1 << 1,
+    EV_CURR = 1 << 2,
+    EV_VOLT = 1 << 3
 };
 
 volatile uint8_t events = EV_NONE;
-
 
 static inline uint16_t btov(uint16_t bit) {
     return V_BIT * bit;
@@ -99,12 +105,41 @@ static inline void xbee_hibernate_disable() {
     _delay_ms(32);
 }
 
-static void col_data(uint8_t pin, uint16_t *data) {
+static inline void run_adc(uint8_t pin, uint16_t *data) {
     adc_pin_select(pin);
     adc_enable();
     sleep(noise_reduction);            
     *data = adc_data();
     adc_disable();
+}
+
+static inline char *buf_append(char *p, char *s) {
+    char c;
+    while ((c = *s++)) {
+        *p++ = c;
+    }
+    return p;
+}
+
+static inline void reverse(char *s, uint8_t n) {
+    uint8_t c, i;
+    for (i = 0; i < n; i++, n--) {
+        c = s[i];
+        s[i] = s[n];
+        s[n] = c;
+    }
+}
+
+static inline char *itoa(char *s, uint16_t n) {
+    uint8_t i;
+    i = 0;
+
+    do {
+        s[i++] = n % 10 + '0';
+    } while ((n /= 10) > 0); 
+    
+    reverse(s, i-1);
+    return s+i;
 }
 
 uint8_t wdt_ctr;
@@ -113,7 +148,7 @@ wdt_interrupt() {
     wdt_reset();
     if (++wdt_ctr == 1) { // 210 is ~30m
         wdt_ctr = 0;
-        events |= EV_ADC;
+        events |= EV_PHOTO;
     }
 }
 
@@ -127,8 +162,8 @@ timer2_interrupt_a() {
 
 __attribute__((noreturn)) int main () {
     uint16_t data = 0;
-    char *p;
-    char out[32];
+    char out[32], tmp[5];
+    char *p = out;
 
     /* watchdog init */
     cli();
@@ -145,8 +180,8 @@ __attribute__((noreturn)) int main () {
 
     /* pin init */
     pin_mode_output(LED_1);
-    pin_mode_output(SENSORS);
-    pin_high(SENSORS);
+    pin_mode_output(PHOTO_SWITCH);
+    pin_high(PHOTO_SWITCH);
     pin_high(LED_1);
     _delay_ms(500);
 
@@ -178,16 +213,34 @@ __attribute__((noreturn)) int main () {
             continue;
         }
         
-        if (events & EV_ADC) {
-            events &= ~EV_ADC;
+        if (events & EV_PHOTO) {
+            events &= ~EV_PHOTO;
 
-            /* photo cell */
-            pin_high(SENSORS);
-            col_data(PHOTO, &data);
-            pin_low(SENSORS);
-            p = itoa(out, vtolux(data * V_BIT));
+            pin_high(PHOTO_SWITCH);
+            run_adc(PHOTO, &data);
+            pin_low(PHOTO_SWITCH);
             p = buf_append(p, "lux");
-            *p = '\0';
+            p = itoa(p, vtolux(data * V_BIT));
+
+            events |= EV_CURR;
+        }
+
+        if (events & EV_CURR) {
+            events &= ~EV_CURR;
+
+            run_adc(CURRENT, &data);
+            p = buf_append(p, "i");
+            p = itoa(p, data);
+
+            events |= EV_VOLT;
+        }
+
+        if (events & EV_VOLT) {
+            events &= ~EV_VOLT;
+
+            run_adc(VOLT, &data);
+            p = buf_append(p, "v");
+            p = itoa(p, data);
 
             events |= EV_UPDATE;
         }
@@ -199,8 +252,10 @@ __attribute__((noreturn)) int main () {
             serial_transmitter_enable();
             xbee_hibernate_disable();
 
+            *p = '\0';
             print_str(out);
             wait_on_serial();
+            p = out;
 
             xbee_hibernate_enable();
             serial_transmitter_disable();

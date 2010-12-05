@@ -41,33 +41,6 @@ static uint8_t out_write(char d) {
     return 0;
 }
 
-static void reverse(char *s, uint8_t n) {
-    uint8_t c, i;
-    for (i = 0; i < n; i++, n--) {
-        c = s[i];
-        s[i] = s[n];
-        s[n] = c;
-    }
-}
-
-char *itoa(char *s, uint16_t n) {
-    uint8_t i;
-    i = 0;
-
-    do {
-        s[i++] = n % 10 + '0';
-    } while ((n /= 10) > 0); 
-    
-    reverse(s, i-1);
-    return s+i;
-}
-
-char *buf_append(char *p, char *s) {
-    while ((*p++ = *s++))
-        ;
-    return p;
-}
-
 static void wait_on_buf() {
     while (out_writeable() == 0) {
         sleep(idle);

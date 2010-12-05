@@ -45,9 +45,17 @@ static char *itoa(char *s, uint16_t n) {
     return s+i;
 }
 
+static inline char *buf_append(char *p, char *s) {
+    char c;
+    while ((c = *s++)) {
+        *p++ = c;
+    }
+    return p;
+}
+
 int main(const int argc, char **argv) {
     char *c;
-    char buf[10];
+    char buf[32];
     uint8_t d8;
     uint16_t d16;
 
@@ -57,13 +65,9 @@ int main(const int argc, char **argv) {
     test_cond(strcmp(buf, "255") == 0);
 
     d16 = 111;
-    c = itoa(c, d16);
+    c = itoa(buf, d16);
     test("uint16 to char ");
     test_cond(strcmp(buf, "111") == 0);
-    *c++ = 'l';
-    *c = '\0';
-    printf("%s \n", buf);
-
 
     d16 = 0;
     c = itoa(buf, d16);
@@ -74,6 +78,19 @@ int main(const int argc, char **argv) {
     c = itoa(buf, d16);
     test("uint16 to char ");
     test_cond(strcmp(buf, "65535") == 0);
+    
+    d16 = 24;
+    c = itoa(buf, d16);
+    c = buf_append(c, "hello");
+    c = itoa(c, d16);
+    c = buf_append(c, "hel");
+    c = buf_append(c, "lo");
+    c = itoa(c, d16);
+    c = itoa(c, d16);
+    *c = '\0';
+
+    test("append to buf ");
+    test_cond(strcmp(buf, "24hello24hello2424") == 0);
 
     if (fails == 0)
         printf("\n%s: %d PASSED\n", *argv, tests);
