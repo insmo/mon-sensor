@@ -13,7 +13,7 @@ BAUD_RATE = 38400
 BIT_CLOCK = 19200 
 PROGRAMMER = ftdi
 ARDUINO_HEADERS = .
-CFLAGS = -O2 -g -mmcu=$(MCU) -DF_CPU=$(F_CPU) \
+CFLAGS = -Os -g -mmcu=$(MCU) -DF_CPU=$(F_CPU) \
          -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums \
          -Wall -Wextra -I$(ARDUINO_HEADERS)
 

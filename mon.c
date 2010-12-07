@@ -126,13 +126,13 @@ static inline void run_adc(uint8_t pin, uint16_t *data) {
 }
 
 static inline char *read_sensors(char *p) {
-    uint16_t data = 0;
+    uint16_t data;
 
     pin_high(PHOTO_SWITCH);
     run_adc(PHOTO, &data);
     pin_low(PHOTO_SWITCH);
-    //p = itoa(p, vtolux(data * V_BIT));
     p = buf_append(p, "lux");
+    //p = itoa(p, vtolux(data * V_BIT));
     p = itoa(p, data);
 
     run_adc(CURRENT, &data);
@@ -165,7 +165,6 @@ static inline void reverse(char *s, uint8_t n) {
 
 static inline char *itoa(char *s, uint16_t n) {
     uint8_t i;
-    i = 0;
 
     do {
         s[i++] = n % 10 + '0';
@@ -175,7 +174,7 @@ static inline char *itoa(char *s, uint16_t n) {
     return s+i;
 }
 
-uint8_t wdt_ctr;
+volatile uint8_t wdt_ctr;
 
 wdt_interrupt() {
     wdt_reset();
