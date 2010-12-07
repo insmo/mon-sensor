@@ -131,21 +131,15 @@ static inline char *read_sensors(char *p) {
     pin_high(PHOTO_SWITCH);
     run_adc(PHOTO, &data);
     pin_low(PHOTO_SWITCH);
-    p = buf_append(p, "lux_pin");
     //p = itoa(p, vtolux(data * V_BIT));
-    p = itoa(p, adc_pin());
     p = buf_append(p, "lux");
     p = itoa(p, data);
 
     run_adc(CURRENT, &data);
-    p = buf_append(p, "i_pin");
-    p = itoa(p, adc_pin());
     p = buf_append(p, "i");
     p = itoa(p, data);
 
     run_adc(VOLT, &data);
-    p = buf_append(p, "v_pin");
-    p = itoa(p, adc_pin());
     p = buf_append(p, "v");
     p = itoa(p, data);
 
