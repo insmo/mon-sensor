@@ -2,7 +2,6 @@
 #include "serial.h"
 #include "sleep.h"
 
-static void reverse(char *s, uint8_t n);
 static uint8_t out_readable();
 static uint8_t out_writeable();
 static uint8_t out_read(char *d);

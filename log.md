@@ -208,3 +208,17 @@ prescaler   overflow frequency      overflow period
 perscale    (1 / overflow period)   ((2 ^ 16) * (64 / 1000000))
 
 64          0.23841 Hz              4.194304 s
+
+# 7 des 2010
+
+ADC Prescaler
+
+Used to give the ADC a clock pulse at a certain rate. This needs to be lower
+then the frequenzy at wich the AVR is operating (50KHz to 200KHz). The lower the
+prescaler value, the more accurate adc, but longer _T_.
+
+The higher division factor, the lower the frequency. 
+
+ADC Channels
+
+Different input sources, up to 8 on the ATmega328P (6 in the DIP package)
