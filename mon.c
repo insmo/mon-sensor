@@ -106,16 +106,21 @@ static inline void xbee_hibernate_disable() {
 }
 
 static inline void run_adc(uint8_t pin, uint16_t *data) {
+    uint8_t i;
+    uint16_t tmp;
+
     adc_interrupt_enable();
     adc_pin_select(pin);
     adc_enable();
-    adc_start();
     
-    while (!adc_interrupt_flag())
-        sleep(noise_reduction);            
+    for (i = 0, tmp = 0; i < 10; i++) {
+        adc_start();
+        while (!adc_interrupt_flag())
+            sleep(noise_reduction);            
+        tmp += adc_data();
+    }
 
-    adc_interrupt_flag_clear();
-    *data = adc_data();
+    *data = tmp/i;
     adc_interrupt_disable();
     adc_disable();
 }
