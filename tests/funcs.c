@@ -2,31 +2,14 @@
 #include <stdint.h>
 #include <math.h>
 
-#define VERBOSE 0
-
-static uint8_t btov(uint16_t adc) {
-    uint8_t v, vres;
+static float btov(uint16_t adc) {
     float vbit;
 
     /* 0.00322mVx10,000 = 32 */
     vbit = 0.00322266;
 
     /* volt x 16 */
-    v = vbit * (adc * 64);
-    
-    return v;
-    /* volt x 1000 f%1.3 */
-    vres = v/10; 
-
-    return vres;
-}
-
-static uint16_t volt(uint16_t adc) {
-    uint8_t vref, mult, scale;
-    vref = 52;
-    mult = 16;
-    scale = 4;
-    return ((vref * adc) / mult) * 4;
+    return vbit * adc;
 }
 
 static float error(float expected, float actual) {
@@ -37,8 +20,40 @@ static float error(float expected, float actual) {
     return (tmp/actual) * 100.0 ;
 }
 
+static uint16_t volt(uint16_t adc) {
+    uint8_t vref, mult, scale;
+    vref = 52;
+    mult = 16;
+    scale = 4;
+    return ((vref * adc) / mult) * 4;
+}
+
 static float current(float m, float c, uint16_t adc) {
     return m * adc + c;
+}
+
+static float light(uint16_t adc) {
+    uint16_t r2;
+    float vref, vbit, vout;
+
+    r2 = 1000;
+    vref = 3.3;
+    vbit = 0.00322266;
+    vout = adc * vbit;
+
+    return (r2 * (vref - vout) / vout);
+}
+
+static float adctor1(uint16_t adc) {
+    float vout, vref;
+    int r2;
+
+    vref = 3.3;
+    r2 = 1000;
+    vout = btov(adc);
+
+    //printf("vref %.3f, vout %.3f, r2 %d\n", vout, vout, r2);
+    return (((vref / vout) * r2) - r2);
 }
 
 int main(const int argc, char **argv) {
@@ -78,5 +93,27 @@ int main(const int argc, char **argv) {
         err += error(c_exp[i], c_act[i]);
     }
     printf("avg err %.2f\% \n", err/3);
+
+    int l[3] = {44, 363, 634};
+    float l_exp[3] = {7.6, 15.1, 40.6};
+    float l_act[3];
+
+    for (i = 0, err=0; i < 3; i++) {
+        l_act[i] = adctor1(l[i]);
+        printf("%.2f R1 \n", l_act[i]);
+    }
+
+    float r1, vout;
+    float r2 = 1000;
+
+    for (i = 0; i < 3; i++ ) {
+        r1 = adctor1(l[i]);
+        r2 = 1000;
+        vout = btov(l[i]);
+
+        printf("%.2f R1, %.2f R1+R2, %.3fVout, %.6f prop\n", r1, r1+r2, vout, vout/(r2*r1));
+    }
+
+    bin((7 >> 4));
     return 0;
 }

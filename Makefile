@@ -15,7 +15,7 @@ PROGRAMMER = ftdi
 ARDUINO_HEADERS = .
 CFLAGS = -Os -g -mmcu=$(MCU) -DF_CPU=$(F_CPU) \
          -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums \
-         -Wall -Wextra -I$(ARDUINO_HEADERS)
+         -Wl,--relax -Wall -Wextra -I$(ARDUINO_HEADERS)
 
 .PHONY: all list tty osc
 .PRECIOUS: %.o %.elf

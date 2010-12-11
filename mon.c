@@ -74,21 +74,6 @@ static uint16_t vtolux(uint16_t vout) {
     float lux_rel;
 
     return 5 / (10 * ((3300.0 - vout) / vout));
-    // return 5.0 / (10.0 * ((3300 - 3290) / 3290 ));
-    // /* volt x 1000 %1.3f */
-    // v = 3300 - vout;
-    // printf("v: %d\n", v);
-    // 
-    // /* lux_rf r2 resistor / 100 */
-    // lux_rf = 10 * v;
-    // printf("rf: %d\n", lux_rf);
-
-    // lux_rel = 5 / lux_rf;
-    // printf("rel: %d\n", lux_rel);
-
-    // /* ex 500/(1000 * ((3.3-3.299)/3.299)) == 1649 lux*/
-    // //return LUX_REL / (LUX_RF * (V_REF - vout) / vout);
-    // return lux_rel;
 }
 
 static inline void xbee_hibernate_enable() { 
@@ -187,7 +172,7 @@ wdt_interrupt() {
 adc_interrupt() {
 }
 
-uint16_t ms;
+static volatile uint16_t ms;
 timer2_interrupt_a() {
     ms++;
 }
@@ -195,6 +180,7 @@ timer2_interrupt_a() {
 __attribute__((noreturn)) int main () {
     char out[32];
     char *p;
+    uint16_t ctr;
 
     /* watchdog init */
     cli();
@@ -212,6 +198,7 @@ __attribute__((noreturn)) int main () {
     /* pin init */
     pin_mode_output(LED_1);
     pin_mode_output(PHOTO_SWITCH);
+    pin_high(PHOTO_SWITCH);
     pin_high(LED_1);
     _delay_ms(500);
 
@@ -243,9 +230,17 @@ __attribute__((noreturn)) int main () {
         
         if (events & EV_DATA) {
             events &= ~EV_DATA;
+            
+            timer2_clock_reset();
+            timer2_count_set(0);
+            ms = 0;
+
             p = out;
             p = read_sensors(p);
+            p = buf_append(p, "ctr");
+            p = itoa(p, ctr);
             *p = '\0';
+            
             events |= EV_SEND;
         }
 
@@ -261,6 +256,7 @@ __attribute__((noreturn)) int main () {
 
             xbee_hibernate_enable();
             serial_transmitter_disable();
+            ctr = ms; 
         }
     }
 }
